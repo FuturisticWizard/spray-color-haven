@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { MapPin } from 'lucide-react';
 import { observeElements } from '@/utils/animations';
+import { toast } from "@/components/ui/use-toast";
 
 // Define the location interface
 interface Location {
@@ -43,6 +44,8 @@ const MapSection: React.FC = () => {
   const [mapLoaded, setMapLoaded] = useState(false);
   const [googleMapsApiKey, setGoogleMapsApiKey] = useState<string>('');
   const [showApiKeyInput, setShowApiKeyInput] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const scriptRef = useRef<HTMLScriptElement | null>(null);
 
   useEffect(() => {
     // Try to get API key from localStorage
@@ -53,92 +56,143 @@ const MapSection: React.FC = () => {
     }
     
     observeElements();
+    
+    // Define the callback function that will be called when the Google Maps script loads
+    window.initMap = () => {
+      if (!mapRef.current) return;
+      
+      try {
+        // Create the map
+        const mapOptions = {
+          center: { lat: 34.0522, lng: -118.2437 }, // Center on LA
+          zoom: 10,
+          styles: [
+            {
+              featureType: 'all',
+              elementType: 'geometry',
+              stylers: [{ color: '#f5f5f5' }]
+            },
+            {
+              featureType: 'water',
+              elementType: 'geometry',
+              stylers: [{ color: '#e9e9e9' }]
+            },
+            {
+              featureType: 'water',
+              elementType: 'labels.text.fill',
+              stylers: [{ color: '#9e9e9e' }]
+            }
+          ]
+        };
+        
+        const map = new window.google.maps.Map(mapRef.current, mapOptions);
+        
+        // Add markers for each location
+        sampleLocations.forEach(location => {
+          const marker = new window.google.maps.Marker({
+            position: location.coordinates,
+            map: map,
+            title: location.title,
+            animation: window.google.maps.Animation.DROP,
+            icon: {
+              path: window.google.maps.SymbolPath.CIRCLE,
+              scale: 8,
+              fillColor: 'hsl(var(--primary))',
+              fillOpacity: 1,
+              strokeWeight: 1,
+              strokeColor: 'white',
+            }
+          });
+          
+          // Add click listener for marker
+          marker.addListener('click', () => {
+            setActiveLocation(location);
+            map.panTo(location.coordinates);
+            map.setZoom(13);
+          });
+        });
+        
+        setMapLoaded(true);
+        setLoading(false);
+      } catch (error) {
+        console.error('Error initializing map:', error);
+        toast({
+          title: "Error loading map",
+          description: "There was a problem loading the Google Maps API. Please check your API key.",
+          variant: "destructive"
+        });
+        setLoading(false);
+      }
+    };
+
+    return () => {
+      // Clean up the global callback when component unmounts
+      window.initMap = () => {
+        console.log("Map initialization prevented during cleanup");
+      };
+    };
   }, []);
 
   useEffect(() => {
     if (!googleMapsApiKey || !mapRef.current || mapLoaded) return;
+    
+    setLoading(true);
+    
+    // Remove previous script if it exists
+    if (scriptRef.current && document.head.contains(scriptRef.current)) {
+      document.head.removeChild(scriptRef.current);
+      scriptRef.current = null;
+    }
     
     // Load Google Maps script
     const script = document.createElement('script');
     script.src = `https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&callback=initMap`;
     script.async = true;
     script.defer = true;
-    
-    // Define the callback function
-    window.initMap = () => {
-      if (!mapRef.current) return;
-      
-      // Create the map
-      const mapOptions = {
-        center: { lat: 34.0522, lng: -118.2437 }, // Center on LA
-        zoom: 10,
-        styles: [
-          {
-            featureType: 'all',
-            elementType: 'geometry',
-            stylers: [{ color: '#f5f5f5' }]
-          },
-          {
-            featureType: 'water',
-            elementType: 'geometry',
-            stylers: [{ color: '#e9e9e9' }]
-          },
-          {
-            featureType: 'water',
-            elementType: 'labels.text.fill',
-            stylers: [{ color: '#9e9e9e' }]
-          }
-        ]
-      };
-      
-      const map = new window.google.maps.Map(mapRef.current, mapOptions);
-      
-      // Add markers for each location
-      sampleLocations.forEach(location => {
-        const marker = new window.google.maps.Marker({
-          position: location.coordinates,
-          map: map,
-          title: location.title,
-          animation: window.google.maps.Animation.DROP,
-          icon: {
-            path: window.google.maps.SymbolPath.CIRCLE,
-            scale: 8,
-            fillColor: 'hsl(var(--primary))',
-            fillOpacity: 1,
-            strokeWeight: 1,
-            strokeColor: 'white',
-          }
-        });
-        
-        // Add click listener for marker
-        marker.addListener('click', () => {
-          setActiveLocation(location);
-          map.panTo(location.coordinates);
-          map.setZoom(13);
-        });
+    script.onerror = () => {
+      console.error('Google Maps script failed to load');
+      toast({
+        title: "Error loading Google Maps",
+        description: "Please check your API key and try again.",
+        variant: "destructive"
       });
+      setLoading(false);
       
-      setMapLoaded(true);
+      // Clean up the failed script
+      if (document.head.contains(script)) {
+        document.head.removeChild(script);
+      }
     };
+    
+    // Store script reference
+    scriptRef.current = script;
     
     // Add script to document
     document.head.appendChild(script);
     
     return () => {
-      // Clean up
-      if (document.head.contains(script)) {
-        document.head.removeChild(script);
+      // This cleanup function runs when the component unmounts or when dependencies change
+      if (scriptRef.current && document.head.contains(scriptRef.current)) {
+        document.head.removeChild(scriptRef.current);
       }
-      window.initMap = undefined;
     };
   }, [googleMapsApiKey, mapLoaded]);
 
   const handleApiKeySubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!googleMapsApiKey.trim()) {
+      toast({
+        title: "API Key Required",
+        description: "Please enter a Google Maps API key.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     localStorage.setItem('google_maps_api_key', googleMapsApiKey);
     setShowApiKeyInput(false);
-    // Reload the page to initialize the map
-    window.location.reload();
+    setMapLoaded(false); // Reset map loaded state to trigger reinitialization
   };
 
   return (
@@ -184,7 +238,7 @@ const MapSection: React.FC = () => {
                 ref={mapRef} 
                 className="w-full h-[500px] rounded-xl shadow-lg overflow-hidden"
               >
-                {!mapLoaded && (
+                {(loading || !mapLoaded) && (
                   <div className="w-full h-full flex items-center justify-center bg-muted">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
                   </div>
