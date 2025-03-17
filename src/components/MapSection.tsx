@@ -91,17 +91,17 @@ const MapSection: React.FC = () => {
         ]
       };
       
-      const map = new google.maps.Map(mapRef.current, mapOptions);
+      const map = new window.google.maps.Map(mapRef.current, mapOptions);
       
       // Add markers for each location
       sampleLocations.forEach(location => {
-        const marker = new google.maps.Marker({
+        const marker = new window.google.maps.Marker({
           position: location.coordinates,
           map: map,
           title: location.title,
-          animation: google.maps.Animation.DROP,
+          animation: window.google.maps.Animation.DROP,
           icon: {
-            path: google.maps.SymbolPath.CIRCLE,
+            path: window.google.maps.SymbolPath.CIRCLE,
             scale: 8,
             fillColor: 'hsl(var(--primary))',
             fillOpacity: 1,
@@ -126,7 +126,9 @@ const MapSection: React.FC = () => {
     
     return () => {
       // Clean up
-      document.head.removeChild(script);
+      if (document.head.contains(script)) {
+        document.head.removeChild(script);
+      }
       window.initMap = undefined;
     };
   }, [googleMapsApiKey, mapLoaded]);
