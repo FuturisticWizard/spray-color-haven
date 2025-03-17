@@ -5,6 +5,7 @@ import Hero from '@/components/Hero';
 import Portfolio from '@/components/Portfolio';
 import Services from '@/components/Services';
 import About from '@/components/About';
+import MapSection from '@/components/MapSection';
 import Contact from '@/components/Contact';
 import Footer from '@/components/Footer';
 import { observeElements } from '@/utils/animations';
@@ -29,6 +30,7 @@ const Index = () => {
       <Portfolio />
       <Services />
       <About />
+      <MapSection />
       <Contact />
       <Footer />
     </div>
